@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">SelfStudy</string>
+    <string name="widget_description">Pantau tugas dan akses cepat timer belajar</string>
 </resources>

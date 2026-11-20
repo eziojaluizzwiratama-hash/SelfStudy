@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -146,8 +147,8 @@ fun ScheduleScreen(
                         onDelete = { scheduleViewModel.deleteSchedule(it) }
                     )
                     1 -> TaskTab(
-                        tasks = if (showCompletedTasks) allTasks.filter { it.isCompleted } else activeTasks,
-                        showingCompleted = showCompletedTasks,
+                        allTasks = allTasks,
+                        initialShowingCompleted = showCompletedTasks,
                         onToggle = { taskViewModel.toggleTaskCompleted(it) },
                         onEdit = { taskViewModel.showEditForm(it) },
                         onDelete = { taskViewModel.deleteTask(it) }
@@ -200,17 +201,74 @@ private fun ScheduleTab(
     onEdit: (Schedule) -> Unit,
     onDelete: (Schedule) -> Unit
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    val isSearching = searchQuery.isNotBlank()
+
+    val displayedSchedules = remember(schedules, allSchedules, searchQuery) {
+        if (isSearching) {
+            allSchedules.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                it.subject.contains(searchQuery, ignoreCase = true)
+            }.sortedBy { it.date }
+        } else {
+            schedules
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Date selector
-        WeekDateSelector(
-            selectedDate = selectedDate,
-            schedules = allSchedules,
-            onDateSelected = onDateSelected
+        // Search Bar for Jadwal
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = {
+                Text(
+                    "Cari jadwal belajar atau ujian...",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = "Cari",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(
+                            Icons.Outlined.Close,
+                            contentDescription = "Hapus",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = Color.Transparent
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         )
 
-        if (schedules.isEmpty()) {
+        if (!isSearching) {
+            // Date selector
+            WeekDateSelector(
+                selectedDate = selectedDate,
+                schedules = allSchedules,
+                onDateSelected = onDateSelected
+            )
+        }
+
+        if (displayedSchedules.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -225,7 +283,7 @@ private fun ScheduleTab(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Outlined.CalendarToday,
+                                imageVector = if (isSearching) Icons.Outlined.SearchOff else Icons.Outlined.CalendarToday,
                                 contentDescription = null,
                                 modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.primary
@@ -234,10 +292,19 @@ private fun ScheduleTab(
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        "Tidak ada jadwal untuk hari ini",
+                        if (isSearching) "Jadwal tidak ditemukan" else "Tidak ada jadwal untuk hari ini",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (isSearching) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = { searchQuery = "" },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Reset Pencarian")
+                        }
+                    }
                 }
             }
         } else {
@@ -246,12 +313,13 @@ private fun ScheduleTab(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(schedules, key = { it.id }) { schedule ->
+                items(displayedSchedules, key = { it.id }) { schedule ->
                     ScheduleItem(
                         schedule = schedule,
                         onToggle = { onToggle(schedule) },
                         onEdit = { onEdit(schedule) },
-                        onDelete = { onDelete(schedule) }
+                        onDelete = { onDelete(schedule) },
+                        showDate = isSearching
                     )
                 }
             }
@@ -363,9 +431,11 @@ private fun ScheduleItem(
     schedule: Schedule,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    showDate: Boolean = false
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val schedDateFormat = remember { SimpleDateFormat("dd MMM yyyy", Locale("id", "ID")) }
     val typeColor = when (schedule.type) {
         "tugas" -> CategoryTugas
         "ujian" -> CategoryUjian
@@ -402,6 +472,14 @@ private fun ScheduleItem(
                     textDecoration = if (schedule.isCompleted) TextDecoration.LineThrough else TextDecoration.None
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (showDate) {
+                        Text(
+                            "${schedDateFormat.format(Date(schedule.date))} • ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     Text(
                         scheduleTimeLabel(schedule.startTime, schedule.endTime),
                         style = MaterialTheme.typography.labelSmall,
@@ -452,57 +530,283 @@ private fun scheduleTimeLabel(startTime: String, endTime: String): String = when
     else -> "Waktu fleksibel"
 }
 
+enum class TaskSortOrder(val label: String) {
+    DEADLINE("Deadline Terdekat"),
+    PRIORITY("Prioritas Tertinggi"),
+    TITLE("Nama (A-Z)")
+}
+
 @Composable
 private fun TaskTab(
-    tasks: List<Task>,
-    showingCompleted: Boolean,
+    allTasks: List<Task>,
+    initialShowingCompleted: Boolean,
     onToggle: (Task) -> Unit,
     onEdit: (Task) -> Unit,
     onDelete: (Task) -> Unit
 ) {
-    if (tasks.isEmpty()) {
-        Box(
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedSubject by remember { mutableStateOf<String?>(null) }
+    var sortOrder by remember { mutableStateOf(TaskSortOrder.DEADLINE) }
+    var showingCompleted by remember(initialShowingCompleted) { mutableStateOf(initialShowingCompleted) }
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    val distinctSubjects = remember(allTasks) {
+        allTasks.map { it.subject.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }
+
+    val tasksForStatus = remember(allTasks, showingCompleted) {
+        allTasks.filter { if (showingCompleted) it.isCompleted else !it.isCompleted }
+    }
+
+    val filteredTasks = remember(tasksForStatus, searchQuery, selectedSubject, sortOrder) {
+        tasksForStatus
+            .filter { task ->
+                if (searchQuery.isBlank()) true
+                else {
+                    task.title.contains(searchQuery, ignoreCase = true) ||
+                    task.subject.contains(searchQuery, ignoreCase = true) ||
+                    task.description.contains(searchQuery, ignoreCase = true)
+                }
+            }
+            .filter { task ->
+                selectedSubject == null || task.subject.equals(selectedSubject, ignoreCase = true)
+            }
+            .let { list ->
+                when (sortOrder) {
+                    TaskSortOrder.DEADLINE -> list.sortedBy { it.dueDate }
+                    TaskSortOrder.PRIORITY -> list.sortedByDescending { it.priority }
+                    TaskSortOrder.TITLE -> list.sortedBy { it.title.lowercase() }
+                }
+            }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Search & Filter Header
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (showingCompleted) Icons.Outlined.AssignmentLate else Icons.Outlined.CheckCircleOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(32.dp),
-                            tint = MaterialTheme.colorScheme.primary
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = {
+                    Text(
+                        "Cari tugas atau mata pelajaran...",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "Cari",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "Hapus",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Filter & Sort Row
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Status Filter Chips
+                item {
+                    FilterChip(
+                        selected = !showingCompleted,
+                        onClick = { showingCompleted = false },
+                        label = { Text("Aktif (${allTasks.count { !it.isCompleted }})") },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = showingCompleted,
+                        onClick = { showingCompleted = true },
+                        label = { Text("Selesai (${allTasks.count { it.isCompleted }})") },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                // Sort Dropdown Button
+                item {
+                    Box {
+                        FilterChip(
+                            selected = sortOrder != TaskSortOrder.DEADLINE,
+                            onClick = { showSortMenu = true },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Sort,
+                                    contentDescription = "Urutkan",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = { Text(sortOrder.label) },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            TaskSortOrder.entries.forEach { order ->
+                                DropdownMenuItem(
+                                    text = { Text(order.label) },
+                                    onClick = {
+                                        sortOrder = order
+                                        showSortMenu = false
+                                    },
+                                    leadingIcon = if (sortOrder == order) {
+                                        { Icon(Icons.Outlined.Check, contentDescription = null) }
+                                    } else null
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Subject Filter Chips
+                if (distinctSubjects.isNotEmpty()) {
+                    item {
+                        FilterChip(
+                            selected = selectedSubject == null,
+                            onClick = { selectedSubject = null },
+                            label = { Text("Semua Mapel") },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                    items(distinctSubjects) { subject ->
+                        FilterChip(
+                            selected = selectedSubject == subject,
+                            onClick = {
+                                selectedSubject = if (selectedSubject == subject) null else subject
+                            },
+                            label = { Text(subject) },
+                            shape = RoundedCornerShape(12.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    if (showingCompleted) "Belum ada tugas selesai" else "Semua tugas sudah selesai!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(tasks, key = { it.id }) { task ->
-                TaskItemFull(
-                    task = task,
-                    onToggle = { onToggle(task) },
-                    onEdit = { onEdit(task) },
-                    onDelete = { onDelete(task) }
-                )
+
+        // List or Empty States
+        if (tasksForStatus.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (showingCompleted) Icons.Outlined.AssignmentLate else Icons.Outlined.CheckCircleOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        if (showingCompleted) "Belum ada tugas selesai" else "Semua tugas sudah selesai!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else if (filteredTasks.isEmpty()) {
+            // Empty state when search or filter returns no results
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.SearchOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Tugas tidak ditemukan",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Coba ubah kata kunci atau reset filter",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = {
+                            searchQuery = ""
+                            selectedSubject = null
+                            sortOrder = TaskSortOrder.DEADLINE
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Reset Filter")
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filteredTasks, key = { it.id }) { task ->
+                    TaskItemFull(
+                        task = task,
+                        onToggle = { onToggle(task) },
+                        onEdit = { onEdit(task) },
+                        onDelete = { onDelete(task) }
+                    )
+                }
             }
         }
     }

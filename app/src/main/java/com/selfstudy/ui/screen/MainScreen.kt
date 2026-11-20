@@ -36,6 +36,13 @@ fun MainScreen(
     var scheduleInitialTab by remember { mutableIntStateOf(0) }
     var scheduleShowCompleted by remember { mutableStateOf(false) }
 
+    LaunchedEffect(initialPageIndex) {
+        val target = initialPageIndex.coerceIn(0, 2)
+        if (pagerState.currentPage != target) {
+            pagerState.animateScrollToPage(target)
+        }
+    }
+
     // Jika pengguna sedang tidak di halaman Beranda (halaman 0), tombol Back kembali ke Beranda
     BackHandler(enabled = pagerState.currentPage != 0) {
         coroutineScope.launch {

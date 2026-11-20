@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.selfstudy.SelfStudyApp
 import com.selfstudy.data.model.Schedule
+import com.selfstudy.widget.SelfStudyWidgetProvider
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -110,6 +111,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 scheduleRepo.insertSchedule(schedule)
             }
             hideForm()
+            SelfStudyWidgetProvider.updateWidget(app)
             onSaved(id)
         }
     }
@@ -117,10 +119,14 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
     fun toggleScheduleCompleted(schedule: Schedule) {
         viewModelScope.launch {
             scheduleRepo.setScheduleCompleted(schedule.id, !schedule.isCompleted)
+            SelfStudyWidgetProvider.updateWidget(app)
         }
     }
 
     fun deleteSchedule(schedule: Schedule) {
-        viewModelScope.launch { scheduleRepo.deleteSchedule(schedule) }
+        viewModelScope.launch {
+            scheduleRepo.deleteSchedule(schedule)
+            SelfStudyWidgetProvider.updateWidget(app)
+        }
     }
 }

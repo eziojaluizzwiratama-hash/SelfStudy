@@ -2,6 +2,7 @@ package com.selfstudy
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,6 +13,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -27,6 +30,8 @@ import com.selfstudy.ui.viewmodel.SettingsViewModel
 
 class MainActivity : ComponentActivity() {
 
+    private var targetPageFromIntent by mutableIntStateOf(0)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
@@ -35,6 +40,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermission()
+
+        targetPageFromIntent = intent?.getIntExtra("target_page", 0) ?: 0
 
         setContent {
             val settingsViewModel: SettingsViewModel = viewModel()
@@ -62,7 +69,10 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable(Screen.Main.route) {
-                        MainScreen(navController = navController)
+                        MainScreen(
+                            navController = navController,
+                            initialPageIndex = targetPageFromIntent
+                        )
                     }
                     composable(Screen.Settings.route) {
                         SettingsScreen(
@@ -71,6 +81,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val target = intent.getIntExtra("target_page", -1)
+        if (target != -1) {
+            targetPageFromIntent = target
         }
     }
 

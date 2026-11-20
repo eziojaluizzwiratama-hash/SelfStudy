@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.selfstudy.SelfStudyApp
 import com.selfstudy.data.model.Task
+import com.selfstudy.widget.SelfStudyWidgetProvider
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -91,6 +92,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 taskRepo.insertTask(task)
             }
             hideForm()
+            SelfStudyWidgetProvider.updateWidget(app)
             onSaved(id)
         }
     }
@@ -103,10 +105,14 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 newCompleted,
                 if (newCompleted) System.currentTimeMillis() else null
             )
+            SelfStudyWidgetProvider.updateWidget(app)
         }
     }
 
     fun deleteTask(task: Task) {
-        viewModelScope.launch { taskRepo.deleteTask(task) }
+        viewModelScope.launch {
+            taskRepo.deleteTask(task)
+            SelfStudyWidgetProvider.updateWidget(app)
+        }
     }
 }
