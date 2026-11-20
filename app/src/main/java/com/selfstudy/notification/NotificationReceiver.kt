@@ -20,9 +20,9 @@ class NotificationReceiver : BroadcastReceiver() {
         val type = intent.getStringExtra("type") ?: "tugas"
 
         val message = when {
-            daysBefore == 1 -> "⚠️ $title ${if (type == "tugas") "dikumpulkan" else "dimulai"} besok!"
-            daysBefore == 0 -> "🔴 $title ${if (type == "tugas") "dikumpulkan" else "dimulai"} hari ini!"
-            else -> "📋 $title ${if (type == "tugas") "dikumpulkan" else "dimulai"} dalam $daysBefore hari lagi"
+            daysBefore == 1 -> "[Penting] $title ${if (type == "tugas") "dikumpulkan" else "dimulai"} besok!"
+            daysBefore == 0 -> "[Hari Ini] $title ${if (type == "tugas") "dikumpulkan" else "dimulai"} hari ini!"
+            else -> "[Pengingat] $title ${if (type == "tugas") "dikumpulkan" else "dimulai"} dalam $daysBefore hari lagi"
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

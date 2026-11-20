@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String, val title: String) {
     data object Splash : Screen("splash", "Splash")
+    data object Main : Screen("main", "Utama")
     data object Dashboard : Screen("dashboard", "Beranda")
     data object Schedule : Screen("schedule", "Jadwal")
     data object Timer : Screen("timer", "Timer")

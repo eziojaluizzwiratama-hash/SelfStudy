@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -32,6 +34,7 @@ import com.selfstudy.notification.NotificationHelper
 import com.selfstudy.ui.theme.*
 import com.selfstudy.ui.viewmodel.ScheduleViewModel
 import com.selfstudy.ui.viewmodel.TaskViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -52,7 +55,18 @@ fun ScheduleScreen(
     val activeTasks by taskViewModel.activeTasks.collectAsState()
     val allTasks by taskViewModel.allTasks.collectAsState()
 
-    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
+    val coroutineScope = rememberCoroutineScope()
+    val tabPagerState = rememberPagerState(
+        initialPage = initialTab.coerceIn(0, 1),
+        pageCount = { 2 }
+    )
+
+    LaunchedEffect(initialTab) {
+        val target = initialTab.coerceIn(0, 1)
+        if (tabPagerState.currentPage != target) {
+            tabPagerState.animateScrollToPage(target)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -72,7 +86,7 @@ fun ScheduleScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    if (selectedTab == 0) scheduleViewModel.showAddForm()
+                    if (tabPagerState.currentPage == 0) scheduleViewModel.showAddForm()
                     else taskViewModel.showAddForm()
                 },
                 containerColor = MaterialTheme.colorScheme.primary
@@ -88,41 +102,57 @@ fun ScheduleScreen(
         ) {
             // Tab Row
             TabRow(
-                selectedTabIndex = selectedTab,
+                selectedTabIndex = tabPagerState.currentPage,
                 containerColor = MaterialTheme.colorScheme.background,
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    selected = tabPagerState.currentPage == 0,
+                    onClick = {
+                        coroutineScope.launch {
+                            tabPagerState.animateScrollToPage(0)
+                        }
+                    },
                     text = { Text("Jadwal") },
                     icon = { Icon(Icons.Outlined.CalendarMonth, null, modifier = Modifier.size(18.dp)) }
                 )
                 Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    selected = tabPagerState.currentPage == 1,
+                    onClick = {
+                        coroutineScope.launch {
+                            tabPagerState.animateScrollToPage(1)
+                        }
+                    },
                     text = { Text("Tugas") },
                     icon = { Icon(Icons.Outlined.Assignment, null, modifier = Modifier.size(18.dp)) }
                 )
             }
 
-            when (selectedTab) {
-                0 -> ScheduleTab(
-                    selectedDate = selectedDate,
-                    schedules = schedulesForDate,
-                    allSchedules = allSchedules,
-                    onDateSelected = { scheduleViewModel.selectDate(it) },
-                    onToggle = { scheduleViewModel.toggleScheduleCompleted(it) },
-                    onEdit = { scheduleViewModel.showEditForm(it) },
-                    onDelete = { scheduleViewModel.deleteSchedule(it) }
-                )
-                1 -> TaskTab(
-                    tasks = if (showCompletedTasks) allTasks.filter { it.isCompleted } else activeTasks,
-                    showingCompleted = showCompletedTasks,
-                    onToggle = { taskViewModel.toggleTaskCompleted(it) },
-                    onEdit = { taskViewModel.showEditForm(it) },
-                    onDelete = { taskViewModel.deleteTask(it) }
-                )
+            HorizontalPager(
+                state = tabPagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalAlignment = Alignment.Top
+            ) { page ->
+                when (page) {
+                    0 -> ScheduleTab(
+                        selectedDate = selectedDate,
+                        schedules = schedulesForDate,
+                        allSchedules = allSchedules,
+                        onDateSelected = { scheduleViewModel.selectDate(it) },
+                        onToggle = { scheduleViewModel.toggleScheduleCompleted(it) },
+                        onEdit = { scheduleViewModel.showEditForm(it) },
+                        onDelete = { scheduleViewModel.deleteSchedule(it) }
+                    )
+                    1 -> TaskTab(
+                        tasks = if (showCompletedTasks) allTasks.filter { it.isCompleted } else activeTasks,
+                        showingCompleted = showCompletedTasks,
+                        onToggle = { taskViewModel.toggleTaskCompleted(it) },
+                        onEdit = { taskViewModel.showEditForm(it) },
+                        onDelete = { taskViewModel.deleteTask(it) }
+                    )
+                }
             }
         }
 
@@ -170,7 +200,9 @@ private fun ScheduleTab(
     onEdit: (Schedule) -> Unit,
     onDelete: (Schedule) -> Unit
 ) {
-    Column {
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
         // Date selector
         WeekDateSelector(
             selectedDate = selectedDate,
@@ -186,8 +218,21 @@ private fun ScheduleTab(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("📅", style = MaterialTheme.typography.headlineLarge)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         "Tidak ada jadwal untuk hari ini",
                         style = MaterialTheme.typography.bodyMedium,
@@ -197,6 +242,7 @@ private fun ScheduleTab(
             }
         } else {
             LazyColumn(
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -422,8 +468,21 @@ private fun TaskTab(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("✅", style = MaterialTheme.typography.headlineLarge)
-                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (showingCompleted) Icons.Outlined.AssignmentLate else Icons.Outlined.CheckCircleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     if (showingCompleted) "Belum ada tugas selesai" else "Semua tugas sudah selesai!",
                     style = MaterialTheme.typography.bodyMedium,
@@ -433,6 +492,7 @@ private fun TaskTab(
         }
     } else {
         LazyColumn(
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
